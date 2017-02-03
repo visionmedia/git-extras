@@ -17,7 +17,10 @@ usage() {
 # get dates for the given <commit>
 #
 dates() {
-  eval "git log $args_to_git_log --pretty='format: %ad' --date=short \"$1\""
+  path="$1"
+  # Escape dollars so they aren't interpreted in eval
+  path="${1/\$/\\$}"
+  eval "git log $args_to_git_log --pretty='format: %ad' --date=short \"${path}\""
 }
 
 # tput, being quiet about unknown capabilities
@@ -59,14 +62,14 @@ active_days() {
 
 color_for() {
   if [ "$to_tty" = true ]; then
-    if   [ $1 -gt 200 ]; then color="$(tputq setaf 1)$(tputq bold)"
-    elif [ $1 -gt 150 ]; then color="$(tputq setaf 1)"  # red
-    elif [ $1 -gt 125 ]; then color="$(tputq setaf 2)$(tputq bold)"
-    elif [ $1 -gt 100 ]; then color="$(tputq setaf 2)"  # green
-    elif [ $1 -gt 75 ]; then color="$(tputq setaf 5)$(tputq bold)"
-    elif [ $1 -gt 50 ]; then color="$(tputq setaf 5)"  # purplish
-    elif [ $1 -gt 25 ]; then color="$(tputq setaf 3)$(tputq bold)"
-    elif [ $1 -gt 10 ]; then color="$(tputq setaf 3)"  # yellow
+    if   [ "$1" -gt 200 ]; then color="$(tputq setaf 1)$(tputq bold)"
+    elif [ "$1" -gt 150 ]; then color="$(tputq setaf 1)"  # red
+    elif [ "$1" -gt 125 ]; then color="$(tputq setaf 2)$(tputq bold)"
+    elif [ "$1" -gt 100 ]; then color="$(tputq setaf 2)"  # green
+    elif [ "$1" -gt 75 ]; then color="$(tputq setaf 5)$(tputq bold)"
+    elif [ "$1" -gt 50 ]; then color="$(tputq setaf 5)"  # purplish
+    elif [ "$1" -gt 25 ]; then color="$(tputq setaf 3)$(tputq bold)"
+    elif [ "$1" -gt 10 ]; then color="$(tputq setaf 3)"  # yellow
     else color="$(tputq sgr0)" # default color
     fi
   else
@@ -80,41 +83,63 @@ color_for() {
 
 effort() {
     path=$1
-    local commit_dates
-    local color reset_color commits len dot f_dot i msg active
-    reset_color=""
-    test "$to_tty" = true && reset_color="$(tputq sgr0)"
-    commit_dates=`dates "$path"`
-    [ $? -gt 0 ] && exit 255
 
-    # Ensure it's not just an empty line
-    if [ -z "`head -c 1 <<<$(echo $commit_dates)`" ]
+    # Exit if path == ""
+    # This is not an error
+    # shellcheck disable=SC2116
+    if [ -z "$(head -c 1 <<<"$(echo "$path")")" ]
     then
       exit 0
     fi
 
-    commits=`wc -l <<<"$(echo "$commit_dates")"`
-    color='90'
+    local commit_dates
+    local color reset_color commits len dot f_dot i msg active
+    reset_color=""
+    test "$to_tty" = true && reset_color="$(tputq sgr0)"
+
+    if ! commit_dates=$(dates "$path")
+    then
+        # 255 should terminate xargs (which runs the effort() function)
+        exit 255
+    fi
+
+    # If `git log ...` returns nothing, return
+    # This is not an error
+    # shellcheck disable=SC2116
+    if [ -z "$(head -c 1 <<<"$(echo "$commit_dates")")" ]
+    then
+      exit 0
+    fi
+
+    # shellcheck disable=SC2116
+    commits=$(wc -l <<<"$(echo "$commit_dates")")
+    color="$(tputq sgr0)" # default color
 
     # ignore <= --above
-    test $commits -le $above && exit 0
+    test "$commits" -le "$above" && exit 0
 
-    # commits
-    color_for $(( $commits - $above ))
+    # Replace actual newlines with a textual representation.
+    # We need to print everything in one line, else we get
+    # a race condition because this function runs in
+    # parallell. Also, the sorting at the end messes things up.
+    path="${path/$'\n'/\\n}"
+
+    color_for $(( commits - above ))
     len=${#path}
     dot="."
     f_dot="$path"
-    i=0 ; while test $i -lt $((45-$len)) ; do
+    i=0 ; while test $i -lt $((45 - len)) ; do
       f_dot=$f_dot$dot
-      i=$(($i+1))
+      i=$((i + 1))
     done
 
-    msg=$(printf "  ${color}%s %-10d" "$f_dot" $commits)
+
+    msg=$(printf "  ${color}%s %-10d" "$f_dot" "$commits")
 
     # active days
-    active=`active_days "$commit_dates"`
-    color_for $(( $active - $above ))
-    msg="$msg $(printf "${color} %d${reset_color}\n" $active)"
+    active=$(active_days "$commit_dates")
+    color_for $(( active - above ))
+    msg="$msg $(printf "${color} %d${reset_color}\n" "$active")"
     echo "$msg"
 }
 
@@ -136,7 +161,7 @@ sort_effort() {
   clear
   echo " "
   heading
-  < $tmp sort -rn -k 2
+  < "$tmp" sort -rn -k 2
 }
 
 declare -a paths=()
@@ -181,8 +206,8 @@ export args_to_git_log
 
 if test "${#paths}" -eq 0; then
   save_ifs=$IFS
-  IFS=`echo -en "\n\b"`
-  paths=(`git ls-files`)
+  IFS=$(echo -en "\n\b")
+  paths=($(git ls-files))
   IFS=$save_ifs
   unset save_ifs
 fi
@@ -206,17 +231,21 @@ export log_args
 bash_params=
 # If bash exits sucessfully with --import-functions,
 # then we need to pass it (FreeBSD probably)
-bash --import-functions -c ":" 1>/dev/null 2>&1
-if [ $? -eq 0 ] ; then
+if bash --import-functions -c ":" 1>/dev/null 2>&1
+then
   bash_params="--import-functions"
 fi
 
 heading
 # send paths to effort
-printf "%s\0" "${paths[@]}" | xargs -0 -n 1 -P 4 -I % bash $bash_params -c "effort \"%\"" | tee $tmp
+printf "%s\0" "${paths[@]}" \
+    | sed 's/\$/\\\$/g' \
+    | sed "s/\\\n/\\\$\'\\\n\'/g" \
+    | xargs -0 -n 1 -P 4 -I % bash $bash_params -c "effort \"%\"" \
+    | tee "$tmp"
 
 # if more than one path, sort and print
-test "$(wc -l $tmp | awk '{print $1}')" -gt 1 && sort_effort
+test "$(wc -l "$tmp" | awk '{print $1}')" -gt 1 && sort_effort
 echo
 
 show_cursor_and_cleanup
