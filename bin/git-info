@@ -1,47 +1,64 @@
 #!/usr/bin/env bash
 
-get_config() {
-  git config --list
+clear
+
+
+max_count=1
+if [[ "$1" == "-c" ]]; then
+    shift
+    max_count="$1"; shift
+fi
+
+color="--color=always"
+no_color="--no-color"
+if [[ "$1" == "${no_color}" ]]; then
+    color="$1"; shift
+else
+    if [[ "$2" == "${no_color}" ]]; then
+        color="$2"
+    fi
+fi
+
+
+header() {
+    if [[ "${color}" != "${no_color}" ]]; then
+        tput setaf 242
+    fi
+
+    printf "### $1\n"
+
+    if [[ "${color}" != "${no_color}" ]]; then
+        tput sgr0
+    fi
 }
 
-most_recent_commit() {
-  git log --max-count=1 --pretty=short
+git_cmd() {
+    eval "$1"
+    printf "\n"
 }
 
-local_branches() {
-  git branch
-}
-
-remote_branches() {
-  git branch -r
-}
-
-remote_urls() {
-  git remote -v
-}
-
-echon() {
-    echo "$@"
-    echo
-}
 
 # Show info similar to svn
 
-echo
-echon "## Remote URLs:"
-echon "$(remote_urls)"
+header "Remote URLs:"
+git_cmd "git remote -v"
 
-echon "## Remote Branches:"
-echon "$(remote_branches)"
+header "Remote Branches:"
+git_cmd "git branch -r ${color}"
 
-echon "## Local Branches:"
-echon "$(local_branches)"
+header "Local Branches:"
+git_cmd "git branch ${color}"
 
-echon "## Most Recent Commit:"
-echon "$(most_recent_commit)"
-echon "Type 'git log' for more commits, or 'git show <commit id>' for full commit details."
+if [[ "${max_count}" -ne 1 ]]; then
+    header="Top ${max_count} Commits:"
+else
+    header="Most Recent Commit:"
+fi
 
-if test "$1" != "--no-config"; then
-  echon "## Configuration (.git/config):"
-  echon "$(get_config)"
+header "${header}"
+git_cmd "git --no-pager log --max-count=${max_count} --pretty=short ${color}"
+
+if [[ "$1" != "--no-config" ]]; then
+  header "Configuration (.git/config):"
+  git --no-pager config --list
 fi
