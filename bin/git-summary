@@ -3,10 +3,13 @@
 
 cd "$(git root)" || { echo "Can't cd to top level directory";exit 1; }
 
+AUTHOR_LISTING=
+
 SUMMARY_BY_LINE=
 DEDUP_BY_EMAIL=
 MERGES_ARG=
 OUTPUT_STYLE=
+AUTHOR_COMMIT_LIMIT=0
 for arg in "$@"; do
     case "$arg" in
         --line)
@@ -20,6 +23,10 @@ for arg in "$@"; do
             ;;
         --output-style)
             OUTPUT_STYLE="$2"
+            shift
+            ;;
+        --author-commit-limit)
+            AUTHOR_COMMIT_LIMIT="$2"
             shift
             ;;
         -*)
@@ -136,10 +143,15 @@ format_authors() {
   # a rare unicode character is used as separator to avoid conflicting with
   # author name. However, Linux column utility will escape tab if separator
   # specified, so we do unesaping after it.
-  LC_ALL=C awk '
+  echo "${1:?}" | LC_ALL=C awk '
+  BEGIN {
+     commitLimit = strtonum('"${AUTHOR_COMMIT_LIMIT}"');
+  }
   { args[NR] = $0; sum += $0 }
   END {
     for (i = 1; i <= NR; ++i) {
+      if (strtonum(args[i]) < commitLimit)
+         break;
       printf "%s♪%2.1f%%\n", args[i], 100 * args[i] / sum
     }
   }
@@ -194,6 +206,10 @@ uncommitted_changes_count() {
   git status --porcelain | wc -l
 }
 
+number_of_authors() {
+  echo "${1:?}" | wc -l
+}
+
 
 COLUMN_CMD_DELIMTER="¬" # Hopefully, this symbol is not used in branch names... I use it as a separator for columns
 SP="$COLUMN_CMD_DELIMTER|"
@@ -208,8 +224,9 @@ print_summary_by_line() {
     echo
     echo " project     : $project"
     echo " lines       : $(line_count "${paths[@]}")"
-    echo " authors     :"
-    lines "${paths[@]}" | sort | uniq -c | sort -rn | format_authors
+    local AUTHOR_LISTING=$(lines "${paths[@]}" | sort | uniq -c | sort -rn)
+    echo " authors     : $(number_of_authors "${AUTHOR_LISTING}")"
+    format_authors "${AUTHOR_LISTING}"
   fi
 }
 
@@ -235,15 +252,17 @@ print_summary() {
       echo " files       : $(file_count)"
     fi
     echo " uncommitted : $(uncommitted_changes_count)"
-    echo " authors     : "
+    local AUTHOR_LISTING
     if [ -n "$DEDUP_BY_EMAIL" ]; then
       # the $commit can be empty
       # shellcheck disable=SC2086
-      git shortlog $MERGES_ARG -n -s -e $commit | dedup_by_email | format_authors
+      AUTHOR_LISTING=$(git shortlog $MERGES_ARG -n -s -e $commit | dedup_by_email)
     else
       # shellcheck disable=SC2086
-      git shortlog $MERGES_ARG -n -s $commit | format_authors
+      AUTHOR_LISTING=$(git shortlog $MERGES_ARG -n -s $commit)
     fi
+    echo " authors     : $(number_of_authors "${AUTHOR_LISTING}")"
+    format_authors "${AUTHOR_LISTING}"
   fi
 }
 

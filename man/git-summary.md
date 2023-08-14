@@ -3,7 +3,7 @@ git-summary(1) -- Show repository summary
 
 ## SYNOPSIS
 
-`git-summary` [--dedup-by-email] [--no-merges] [&lt;committish&gt;]
+`git-summary` [--dedup-by-email] [--no-merges] [--author-commit-limit &lt;count&gt;] [&lt;committish&gt;]
 
 `git-summary` --line [&lt;path&gt;]
 
@@ -39,6 +39,10 @@ Shows a summary of the repository or a path within it.
 
   Exclude merge commits.
 
+  --author-commit-limit &lt;count&gt;
+
+  Omit authors with less than &lt;count&gt; authored commits from author listing. Defaults to zero.
+
   --line
 
   Summarize with lines other than commits.
@@ -72,7 +76,7 @@ Shows a summary of the repository or a path within it.
     commits     : 1893
     files       : 111
     uncommitted : 3
-    authors     :
+    authors     : 18
      1285 visionmedia
       478 Tj Holowaychuk
        48 Aaron Heckmann
@@ -103,7 +107,7 @@ Shows a summary of the repository or a path within it.
 
     project  : git-extras
     lines    : 26820
-    authors  :
+    authors  : 206
       ...
 
   Filter with the path:
@@ -112,7 +116,7 @@ Shows a summary of the repository or a path within it.
 
     project  : git-extras
     lines    : 4420
-    authors  :
+    authors  : 141
       ...
 
   Tabular summary
