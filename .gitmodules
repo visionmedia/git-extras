@@ -1,6 +1,3 @@
-[submodule "os-unix/vendor/bash-core"]
-	path = os-unix/vendor/bash-core
-	url = git@github.com:bash-bastion/bash-core
 [submodule "vendor/bats-all"]
 	path = vendor/bats-all
 	url = https://github.com/hyperupcall/bats-all
