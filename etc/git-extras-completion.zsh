@@ -441,3 +441,5 @@ zstyle ':completion:*:*:git:*' user-commands $existing_user_commands \
     undo:'remove latest commits' \
     unlock:'unlock a file excluded from version control' \
     utimes:'change files modification time to their last commit date'
+    unwip:'undo a WIP commit' \
+    wip:'create a WIP commit'
